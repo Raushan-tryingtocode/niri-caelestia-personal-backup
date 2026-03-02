@@ -42,14 +42,12 @@ Item {
         text: {
             if (root.pam.passwd.active)
                 return qsTr("Loading...");
-            if (root.pam.state === "max")
-                return qsTr("You have reached the maximum number of tries");
-            return qsTr("Enter your password");
+            return "";
         }
 
         animate: true
         color: root.pam.passwd.active ? Colours.palette.m3secondary : Colours.palette.m3outline
-        font.pointSize: Appearance.font.size.bodyMedium
+        font.pointSize: Appearance.font.size.bodySmall
         font.family: Appearance.font.family.mono
 
         opacity: root.buffer ? 0 : 1

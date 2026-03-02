@@ -13,24 +13,44 @@ GridLayout {
     anchors.right: parent.right
     anchors.margins: Appearance.padding.xl
 
-    rowSpacing: Appearance.spacing.xxl
-    columnSpacing: Appearance.spacing.xxl
-    rows: 2
+    rowSpacing: Appearance.spacing.md
+    columnSpacing: Appearance.spacing.md
     columns: 2
 
     Ref {
         service: SystemUsage
     }
 
-    Resource {
+    // Section label
+    RowLayout {
+        Layout.columnSpan: 2
+        Layout.fillWidth: true
         Layout.topMargin: Appearance.padding.xl
+        Layout.bottomMargin: Appearance.spacing.xs
+        spacing: Appearance.spacing.xs
+
+        MaterialIcon {
+            text: "monitor_heart"
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.labelLarge
+        }
+
+        StyledText {
+            text: qsTr("System")
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.labelLarge
+            font.weight: Font.Medium
+            font.family: Appearance.font.family.mono
+        }
+    }
+
+    Resource {
         icon: "memory"
         value: SystemUsage.cpuPerc
         colour: Colours.palette.m3primary
     }
 
     Resource {
-        Layout.topMargin: Appearance.padding.xl
         icon: "thermostat"
         value: Math.min(1, SystemUsage.cpuTemp / 90)
         colour: Colours.palette.m3secondary

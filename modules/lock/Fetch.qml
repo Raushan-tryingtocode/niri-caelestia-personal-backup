@@ -9,158 +9,81 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
+// System fetch widget — flex-filling middle slot of the left lock panel.
+// anchors.margins: padding.xl mirrors Resources.qml / Media.qml internal inset.
 ColumnLayout {
     id: root
 
     anchors.fill: parent
-    anchors.margins: Appearance.padding.xl * 2
-    anchors.topMargin: Appearance.padding.xl
+    anchors.margins: Appearance.padding.xl
 
-    spacing: Appearance.spacing.sm
+    spacing: Appearance.spacing.md
 
+    // ── Terminal header ────────────────────────────────────────────────────────
+    //  icon + filename — mono, muted, matches section-label style across shell
     RowLayout {
         Layout.fillWidth: true
-        Layout.fillHeight: false
-        spacing: Appearance.spacing.lg
+        spacing: Appearance.spacing.sm
 
-        StyledRect {
-            implicitWidth: prompt.implicitWidth + Appearance.padding.md * 2
-            implicitHeight: prompt.implicitHeight + Appearance.padding.md * 2
-
-            color: Colours.palette.m3primary
-            radius: Appearance.rounding.small
-
-            MonoText {
-                id: prompt
-
-                anchors.centerIn: parent
-                text: ">"
-                font.pointSize: root.width > 400 ? Appearance.font.size.bodyLarge : Appearance.font.size.bodyMedium
-                color: Colours.palette.m3onPrimary
-            }
+        MaterialIcon {
+            text: "terminal"
+            font.pointSize: Appearance.font.size.bodyMedium
+            color: Colours.palette.m3onSurfaceVariant
         }
 
-        MonoText {
+        StyledText {
             Layout.fillWidth: true
-            text: "caelestiafetch.sh"
-            font.pointSize: root.width > 400 ? Appearance.font.size.bodyLarge : Appearance.font.size.bodyMedium
+            text: "Systemfetch.sh"
+            font.pointSize: Appearance.font.size.bodySmall
+            font.family: Appearance.font.family.mono
+            color: Colours.palette.m3onSurfaceVariant
             elide: Text.ElideRight
         }
-
-        WrappedLoader {
-            Layout.fillHeight: true
-            active: !iconLoader.active
-
-            sourceComponent: OsLogo {}
-        }
     }
 
-    RowLayout {
+    // ── Info key-value rows ────────────────────────────────────────────────────
+    // Placed directly in root ColumnLayout — top-aligned, equal spacing between rows
+    InfoRow { label: "OS";  value: SysInfo.osPrettyName || SysInfo.osName }
+    InfoRow { label: "WM";  value: SysInfo.wm }
+    InfoRow { label: "USR"; value: SysInfo.user }
+    InfoRow { label: "UP";  value: SysInfo.uptime }
+
+    InfoRow {
+        visible: UPower.displayDevice.isLaptopBattery
+        label: "BAT"
+        value: `${UPower.onBattery ? "" : "+ "}${Math.round(UPower.displayDevice.percentage * 100)}%`
+    }
+
+    Item { Layout.preferredHeight: Appearance.font.size.labelLarge }
+
+    // Flex spacer — pushes swatches to the bottom of the available area
+    Item { Layout.fillHeight: true }
+
+    // ── Inline component: key : value row ─────────────────────────────────────
+    component InfoRow: RowLayout {
+        id: infoRow
+
+        required property string label
+        required property string value
+
         Layout.fillWidth: true
-        Layout.fillHeight: false
-        spacing: height * 0.15
+        spacing: Appearance.spacing.xs
 
-        WrappedLoader {
-            id: iconLoader
-
-            Layout.fillHeight: true
-            active: root.width > 320
-
-            sourceComponent: OsLogo {}
+        StyledText {
+            text: infoRow.label
+            font.pointSize: Appearance.font.size.labelLarge
+            font.family: Appearance.font.family.mono
+            color: Colours.palette.m3primary
+            font.weight: Font.Medium
         }
 
-        ColumnLayout {
+        StyledText {
             Layout.fillWidth: true
-            Layout.topMargin: Appearance.padding.md
-            Layout.bottomMargin: Appearance.padding.md
-            Layout.leftMargin: iconLoader.active ? 0 : width * 0.1
-            spacing: Appearance.spacing.lg
-
-            WrappedLoader {
-                Layout.fillWidth: true
-                active: !batLoader.active && root.height > 200
-
-                sourceComponent: FetchText {
-                    text: `OS  : ${SysInfo.osPrettyName || SysInfo.osName}`
-                }
-            }
-
-            WrappedLoader {
-                Layout.fillWidth: true
-                active: root.height > (batLoader.active ? 200 : 110)
-
-                sourceComponent: FetchText {
-                    text: `WM  : ${SysInfo.wm}`
-                }
-            }
-
-            WrappedLoader {
-                Layout.fillWidth: true
-                active: !batLoader.active || root.height > 110
-
-                sourceComponent: FetchText {
-                    text: `USER: ${SysInfo.user}`
-                }
-            }
-
-            FetchText {
-                text: `UP  : ${SysInfo.uptime}`
-            }
-
-            WrappedLoader {
-                id: batLoader
-
-                Layout.fillWidth: true
-                active: UPower.displayDevice.isLaptopBattery
-
-                sourceComponent: FetchText {
-                    text: `BATT: ${UPower.onBattery ? "" : "(+) "}${Math.round(UPower.displayDevice.percentage * 100)}%`
-                }
-            }
+            text: infoRow.value
+            font.pointSize: Appearance.font.size.labelLarge
+            font.family: Appearance.font.family.mono
+            color: Colours.palette.m3onSurfaceVariant
+            elide: Text.ElideRight
         }
-    }
-
-    WrappedLoader {
-        Layout.alignment: Qt.AlignHCenter
-        active: root.height > 180
-
-        sourceComponent: RowLayout {
-            spacing: Appearance.spacing.xxl
-
-            Repeater {
-                model: Math.max(0, Math.min(8, root.width / (Appearance.font.size.bodyLarge * 2 + Appearance.spacing.xxl)))
-
-                StyledRect {
-                    required property int index
-
-                    implicitWidth: implicitHeight
-                    implicitHeight: Appearance.font.size.bodyLarge * 2
-                    color: Colours.palette[`term${index}`]
-                    radius: Appearance.rounding.small
-                }
-            }
-        }
-    }
-
-    component WrappedLoader: Loader {
-        asynchronous: true
-        visible: active
-    }
-
-    component OsLogo: ColouredIcon {
-        source: SysInfo.osLogo
-        implicitSize: height
-        colour: Colours.palette.m3primary
-        layer.enabled: Config.lock.recolourLogo || SysInfo.isDefaultLogo
-    }
-
-    component FetchText: MonoText {
-        Layout.fillWidth: true
-        font.pointSize: root.width > 400 ? Appearance.font.size.bodyLarge : Appearance.font.size.bodyMedium
-        elide: Text.ElideRight
-    }
-
-    component MonoText: StyledText {
-        font.family: Appearance.font.family.mono
     }
 }
