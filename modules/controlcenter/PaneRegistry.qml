@@ -47,6 +47,30 @@ QtObject {
             readonly property string label: "dashboard"
             readonly property string icon: "dashboard"
             readonly property string component: "dashboard/DashboardPane.qml"
+        },
+        QtObject {
+            readonly property string id: "notifications"
+            readonly property string label: "notifications"
+            readonly property string icon: "notifications"
+            readonly property string component: "notifications/NotificationsPane.qml"
+        },
+        QtObject {
+            readonly property string id: "osd"
+            readonly property string label: "OSD"
+            readonly property string icon: "tune"
+            readonly property string component: "osd/OsdPane.qml"
+        },
+        QtObject {
+            readonly property string id: "lock"
+            readonly property string label: "lock screen"
+            readonly property string icon: "lock"
+            readonly property string component: "lock/LockPane.qml"
+        },
+        QtObject {
+            readonly property string id: "session"
+            readonly property string label: "session"
+            readonly property string icon: "power_settings_new"
+            readonly property string component: "session/SessionPane.qml"
         }
     ]
 

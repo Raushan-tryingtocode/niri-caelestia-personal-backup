@@ -31,6 +31,15 @@ CollapsibleSection {
         }
     }
 
+    SwitchRow {
+        label: qsTr("Reduce transparency")
+        checked: rootPane.reduceTransparency
+        onToggled: checked => {
+            rootPane.reduceTransparency = checked;
+            rootPane.saveConfig();
+        }
+    }
+
     SectionContainer {
         contentSpacing: Appearance.spacing.lg
 

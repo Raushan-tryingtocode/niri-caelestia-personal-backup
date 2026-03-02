@@ -7,6 +7,10 @@ import "appearance"
 import "taskbar"
 import "launcher"
 import "dashboard"
+import "notifications"
+import "osd"
+import "lock"
+import "session"
 import qs.components
 import qs.services
 import qs.config
