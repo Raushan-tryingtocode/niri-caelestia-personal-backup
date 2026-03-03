@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 </div>
 
 
-<div align=center> <h2>  ScreenShorts </h2>
+<div align=center> <h2>  Screenshots </h2>
 
 | App Launcher | Clipboard |
 |:---:|:---:|
@@ -68,7 +68,7 @@ You need both runtime dependencies and development headers.
 <br>
 
 * All dependencies in plain text:
-   * `quickshell-git networkmanager fish glibc qt6-declarative gcc-libs cava libcava aubio libpipewire ddcutil brightnessctl  ttf-material-icons-git ttf-jetbrains-mono grim swappy app2unit libqalculate python-materialyoucolor`
+   * `quickshell-git networkmanager fish glibc qt6-declarative gcc-libs cava libcava aubio libpipewire ddcutil brightnessctl ttf-material-icons-git ttf-jetbrains-mono grim swappy app2unit libqalculate python-materialyoucolor wl-clipboard cliphist`
 
 > [!NOTE]
 >
@@ -85,6 +85,7 @@ You need both runtime dependencies and development headers.
 | Audio & Visual | `cava`, `libcava`, `aubio`, `libpipewire`, `ddcutil`, `brightnessctl`, `materialyoucolor` |
 | Fonts | `ttf-material-icons-git`, `ttf-jetbrains-mono` |
 | Screenshot & Utils | `grim`, `swappy`, `app2unit`, `libqalculate` |
+| Clipboard | `wl-clipboard`, `cliphist` |
 | Build | `cmake`, `ninja` |
 
 
@@ -149,7 +150,6 @@ cd ~/.config/quickshell/niri-caelestia-shell
 git pull
 ```
 
-<br>
 ---
 
 ## Theme Setup
@@ -570,7 +570,15 @@ Config lives in:
         "showOnHover": false
     },
     "lock": {
-        "recolourLogo": false
+        "recolourLogo": false,
+        "enableFprint": true,
+        "showExtras": true,
+        "maxFprintTries": 3,
+        "sizes": {
+            "heightMult": 0.7,
+            "ratio": 1.7778,
+            "centerWidth": 600
+        }
     },
     "notifs": {
         "actionOnClick": false,
@@ -673,7 +681,7 @@ The profile picture for the dashboard is read from the file `~/.face`, so to set
 it you can copy your image to there or set it via the dashboard. **It's not a directory.**
 
 The wallpapers for the wallpaper switcher are read from `~/Pictures/Wallpapers`
-by default. To change it, change the wallpapers path in `~/.config/caelestia/shell.json`.
+by default. To change it, change the wallpapers path in `~/.config/niri_caelestia/shell.json`.
 
 To set the wallpaper, you can use the app launcher command `> wallpaper`.
 
@@ -685,7 +693,6 @@ To set the wallpaper, you can use the app launcher command `> wallpaper`.
 1. Task manager has no Intel GPU support (AMD/NVIDIA only)
 2. Focus grabbing for Quickshell windows behaves awkwardly due to Niri limitations
 3. Quickshell may occasionally crash due to upstream issues (auto-restarts)
-4. Some dependencies may not be strictly required (inherited from upstream)
 
 
 ---
