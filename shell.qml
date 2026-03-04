@@ -8,7 +8,6 @@ import "modules/areapicker"
 import "modules/lock"
 import "modules/clipboard"
 import "modules/quicktoggles"
-// ...existing code...
 import "modules/background"
 import qs.modules.controlcenter
 import qs.services
@@ -25,8 +24,7 @@ ShellRoot {
     Shortcuts {}
     ClipboardPanel {}
     QuickTogglesPanel {}
-    // ...existing code...
-    
+
     // Initialize BatteryMonitor service
     property var _batteryMonitor: BatteryMonitor
 }

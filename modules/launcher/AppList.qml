@@ -17,6 +17,24 @@ StyledListView {
     required property TextField search
     required property PersistentProperties visibilities
 
+    // Debounce search text to avoid re-filtering on every keystroke
+    property string _debouncedText: search.text
+    Timer {
+        id: _searchDebounce
+        interval: 120
+        onTriggered: root._debouncedText = root.search.text
+    }
+    Connections {
+        target: root.search
+        function onTextChanged(): void {
+            // Immediate update for short strings (mode detection), debounce for actual search
+            if (root.search.text.length <= 1)
+                root._debouncedText = root.search.text;
+            else
+                _searchDebounce.restart();
+        }
+    }
+
     model: ScriptModel {
         id: model
 
@@ -37,7 +55,7 @@ StyledListView {
     }
 
     state: {
-        const text = search.text;
+        const text = _debouncedText;
         const prefix = Config.launcher.actionPrefix;
         if (text.startsWith(prefix)) {
             for (const action of ["calc", "scheme", "variant"])
@@ -60,7 +78,7 @@ StyledListView {
             name: "apps"
 
             PropertyChanges {
-                model.values: Apps.search(search.text)
+                model.values: Apps.search(root._debouncedText)
                 root.delegate: appItem
             }
         },
@@ -68,7 +86,7 @@ StyledListView {
             name: "actions"
 
             PropertyChanges {
-                model.values: Actions.query(search.text)
+                model.values: Actions.query(root._debouncedText)
                 root.delegate: actionItem
             }
         },
@@ -84,7 +102,7 @@ StyledListView {
             name: "scheme"
 
             PropertyChanges {
-                model.values: Schemes.query(search.text)
+                model.values: Schemes.query(root._debouncedText)
                 root.delegate: schemeItem
             }
         },
@@ -92,7 +110,7 @@ StyledListView {
             name: "variant"
 
             PropertyChanges {
-                model.values: M3Variants.query(search.text)
+                model.values: M3Variants.query(root._debouncedText)
                 root.delegate: variantItem
             }
         }

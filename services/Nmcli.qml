@@ -31,6 +31,7 @@ Singleton {
     readonly property var activeEthernet: ethernetDevices.find(d => d.connected) ?? null
 
     property list<var> activeProcesses: []
+    property list<var> _commandQueue: []
 
     // Constants
     readonly property string deviceTypeWifi: "wifi"
@@ -163,23 +164,54 @@ Singleton {
         return state === "100 (connected)" || state === "connected" || state.startsWith("connected");
     }
 
-    function executeCommand(args: list<string>, callback: var): void {
-        const proc = commandProc.createObject(root);
+    function _getAvailableProc(): var {
+        for (let i = 0; i < _processPool.length; i++) {
+            if (!_processPool[i].running && !_processPool[i]._busy)
+                return _processPool[i];
+        }
+        return null;
+    }
+
+    function _drainQueue(): void {
+        if (_commandQueue.length === 0) return;
+        const proc = _getAvailableProc();
+        if (!proc) return;
+
+        const entry = _commandQueue.shift();
+        _runOnProc(proc, entry.args, entry.callback);
+    }
+
+    function _runOnProc(proc: var, args: list<string>, callback: var): void {
         proc.command = ["nmcli", ...args];
         proc.callback = callback;
+        proc.callbackCalled = false;
+        proc._busy = true;
+        proc._timeoutTimer.restart();
 
         activeProcesses.push(proc);
 
-        proc.processFinished.connect(() => {
+        proc.processFinished.connect(function cleanup() {
+            proc.processFinished.disconnect(cleanup);
+            proc._busy = false;
+            proc._timeoutTimer.stop();
             const index = activeProcesses.indexOf(proc);
-            if (index >= 0) {
+            if (index >= 0)
                 activeProcesses.splice(index, 1);
-            }
+            Qt.callLater(root._drainQueue);
         });
 
         Qt.callLater(() => {
             proc.exec(proc.command);
         });
+    }
+
+    function executeCommand(args: list<string>, callback: var): void {
+        const proc = _getAvailableProc();
+        if (proc) {
+            _runOnProc(proc, args, callback);
+        } else {
+            _commandQueue.push({ args, callback });
+        }
     }
 
     function getDeviceStatus(callback: var): void {
@@ -868,6 +900,7 @@ Singleton {
         property list<string> command: []
         property bool callbackCalled: false
         property int exitCode: 0
+        property bool _busy: false
 
         signal processFinished
 
@@ -875,6 +908,27 @@ Singleton {
                 LANG: "C.UTF-8",
                 LC_ALL: "C.UTF-8"
             })
+
+        property Timer _timeoutTimer: Timer {
+            interval: 30000
+            onTriggered: {
+                if (proc._busy) {
+                    console.warn("[NMCLI] Process timed out after 30s, killing:", proc.command.join(" "));
+                    proc.kill();
+                    if (!proc.callbackCalled && proc.callback) {
+                        proc.callbackCalled = true;
+                        proc.callback({
+                            success: false,
+                            output: "",
+                            error: "Process timed out",
+                            exitCode: -1,
+                            needsPassword: false
+                        });
+                    }
+                    proc.processFinished();
+                }
+            }
+        }
 
         stdout: StdioCollector {
             id: stdoutCollector
@@ -935,11 +989,12 @@ Singleton {
         }
     }
 
-    Component {
-        id: commandProc
-
+    readonly property list<CommandProcess> _processPool: [
+        CommandProcess {},
+        CommandProcess {},
+        CommandProcess {},
         CommandProcess {}
-    }
+    ]
 
     component AccessPoint: QtObject {
         required property var lastIpcObject
@@ -1283,6 +1338,27 @@ Singleton {
         }
     }
 
+    Timer {
+        id: _staleCleanupTimer
+        interval: 60000
+        repeat: true
+        onTriggered: {
+            // Force-release any pool entries stuck as busy but not running
+            for (let i = 0; i < root._processPool.length; i++) {
+                const proc = root._processPool[i];
+                if (proc._busy && !proc.running) {
+                    console.warn("[NMCLI] Cleaning stale pool entry", i);
+                    proc._busy = false;
+                    proc._timeoutTimer.stop();
+                    const idx = root.activeProcesses.indexOf(proc);
+                    if (idx >= 0)
+                        root.activeProcesses.splice(idx, 1);
+                }
+            }
+            root._drainQueue();
+        }
+    }
+
     function refreshOnConnectionChange(): void {
         getNetworks(networks => {
             const newActive = root.active;
@@ -1324,6 +1400,9 @@ Singleton {
     }
 
     Component.onCompleted: {
+        // Clean up any stale processes on a 60s interval
+        _staleCleanupTimer.start();
+
         getWifiStatus(() => {});
         getNetworks(() => {});
         loadSavedConnections(() => {});

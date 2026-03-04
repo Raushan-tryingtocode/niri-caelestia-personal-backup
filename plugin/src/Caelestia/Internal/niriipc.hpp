@@ -2,6 +2,7 @@
 
 #include "nirisocket.hpp"
 
+#include <qhash.h>
 #include <qjsonarray.h>
 #include <qjsonobject.h>
 #include <qobject.h>
@@ -131,6 +132,9 @@ private:
     void updateWorkspaceHasWindows();
     void updateFocusedWindowFields();
     void sortWindowsList();
+    void sortWindowsIfDirty();
+    void rebuildWindowIndex();
+    int findWindowIndexById(qint64 id) const;
     void setupLedWatchers();
     void readLedState();
 
@@ -149,6 +153,8 @@ private:
 
     // Window state
     QVariantList m_windows;
+    QHash<qint64, int> m_windowIndex; // window ID -> index in m_windows for O(1) lookup
+    bool m_windowsSortDirty = false;
     int m_focusedWindowIndex = -1;
     QString m_focusedWindowId;
     QString m_focusedWindowTitle;

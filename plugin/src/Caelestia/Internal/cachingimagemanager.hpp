@@ -1,8 +1,11 @@
 #pragma once
 
 #include <QtQuick/qquickitem.h>
+#include <qmap.h>
+#include <qmutex.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
+#include <qtimer.h>
 
 namespace caelestia {
 
@@ -19,7 +22,11 @@ class CachingImageManager : public QObject {
 public:
     explicit CachingImageManager(QObject* parent = nullptr)
         : QObject(parent)
-        , m_item(nullptr) {}
+        , m_item(nullptr) {
+        m_debounceTimer.setSingleShot(true);
+        m_debounceTimer.setInterval(150);
+        connect(&m_debounceTimer, &QTimer::timeout, this, [this]() { updateSource(); });
+    }
 
     [[nodiscard]] QQuickItem* item() const;
     void setItem(QQuickItem* item);
@@ -44,6 +51,13 @@ signals:
     void usingCacheChanged();
 
 private:
+    // LRU cache entry for tracking disk cached images
+    struct CacheEntry {
+        QString filePath;
+        qint64 fileSize;
+        qint64 lastAccess; // msecs since epoch
+    };
+
     QString m_shaPath;
 
     QQuickItem* m_item;
@@ -54,11 +68,20 @@ private:
 
     QMetaObject::Connection m_widthConn;
     QMetaObject::Connection m_heightConn;
+    QTimer m_debounceTimer;
+
+    // LRU cache tracking (shared across all instances)
+    static QMap<QString, CacheEntry> s_cacheEntries;
+    static qint64 s_totalCacheSize;
+    static QMutex s_cacheMutex;
+    static constexpr qint64 MAX_CACHE_BYTES = 100 * 1024 * 1024; // 100 MB
 
     [[nodiscard]] qreal effectiveScale() const;
     [[nodiscard]] QSize effectiveSize() const;
 
-    void createCache(const QString& path, const QString& cache, const QString& fillMode, const QSize& size) const;
+    void createCache(const QString& path, const QString& cache, const QString& fillMode, const QSize& size);
+    void trackCacheEntry(const QString& cachePath, qint64 fileSize);
+    void evictIfNeeded();
     [[nodiscard]] static QString sha256sum(const QString& path);
 };
 

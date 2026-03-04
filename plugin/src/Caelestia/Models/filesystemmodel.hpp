@@ -84,6 +84,8 @@ class FileSystemModel : public QAbstractListModel {
     Q_PROPERTY(bool watchChanges READ watchChanges WRITE setWatchChanges NOTIFY watchChangesChanged)
     Q_PROPERTY(bool showHidden READ showHidden WRITE setShowHidden NOTIFY showHiddenChanged)
     Q_PROPERTY(Filter filter READ filter WRITE setFilter NOTIFY filterChanged)
+    Q_PROPERTY(int maxWatchDepth READ maxWatchDepth WRITE setMaxWatchDepth NOTIFY maxWatchDepthChanged)
+    Q_PROPERTY(int maxWatchPaths READ maxWatchPaths WRITE setMaxWatchPaths NOTIFY maxWatchPathsChanged)
 
     Q_PROPERTY(QList<FileSystemEntry*> entries READ entries NOTIFY entriesChanged)
 
@@ -101,7 +103,9 @@ public:
         , m_recursive(false)
         , m_watchChanges(true)
         , m_showHidden(false)
-        , m_filter(NoFilter) {
+        , m_filter(NoFilter)
+        , m_maxWatchDepth(3)
+        , m_maxWatchPaths(100) {
         connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, &FileSystemModel::watchDirIfRecursive);
         connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, &FileSystemModel::updateEntriesForDir);
     }
@@ -125,6 +129,12 @@ public:
     [[nodiscard]] Filter filter() const;
     void setFilter(Filter filter);
 
+    [[nodiscard]] int maxWatchDepth() const;
+    void setMaxWatchDepth(int depth);
+
+    [[nodiscard]] int maxWatchPaths() const;
+    void setMaxWatchPaths(int paths);
+
     [[nodiscard]] QList<FileSystemEntry*> entries() const;
 
 signals:
@@ -133,6 +143,8 @@ signals:
     void watchChangesChanged();
     void showHiddenChanged();
     void filterChanged();
+    void maxWatchDepthChanged();
+    void maxWatchPathsChanged();
     void entriesChanged();
 
     void added(const FileSystemEntry* entry);
@@ -149,6 +161,8 @@ private:
     bool m_watchChanges;
     bool m_showHidden;
     Filter m_filter;
+    int m_maxWatchDepth;
+    int m_maxWatchPaths;
 
     void watchDirIfRecursive(const QString& path);
     void update();

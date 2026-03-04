@@ -25,10 +25,48 @@ Singleton {
     readonly property Transparency transparency: Transparency {}
     property real wallLuminance
 
+    // Invalidate luminance cache and schedule tPalette update when inputs change
+    onShowPreviewChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
+    onWallLuminanceChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
+    onLightChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
+
+    Connections {
+        target: root.transparency
+        function onEnabledChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
+        function onBaseChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
+        function onLayersChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
+    }
+
+    Connections {
+        target: root.palette
+        function onM3primaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3surfaceChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3backgroundChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3secondaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3tertiaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3errorChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+    }
+
+    // Luminance cache to avoid redundant Math.pow() calls
+    property var _luminanceCache: ({})
+    property int _luminanceCacheSize: 0
+
     function getLuminance(c: color): real {
         if (c.r == 0 && c.g == 0 && c.b == 0)
             return 0;
-        return Math.sqrt(0.299 * (c.r ** 2) + 0.587 * (c.g ** 2) + 0.114 * (c.b ** 2));
+        // Use color string as cache key
+        const key = "" + c;
+        if (key in _luminanceCache)
+            return _luminanceCache[key];
+        const val = Math.sqrt(0.299 * (c.r ** 2) + 0.587 * (c.g ** 2) + 0.114 * (c.b ** 2));
+        // Limit cache size to prevent unbounded growth
+        if (_luminanceCacheSize > 200) {
+            _luminanceCache = {};
+            _luminanceCacheSize = 0;
+        }
+        _luminanceCache[key] = val;
+        _luminanceCacheSize++;
+        return val;
     }
 
     function alterColour(c: color, a: real, layer: int): color {
@@ -79,6 +117,8 @@ Singleton {
             }
         }
         console.log("Colours.load: loaded", loadedCount, "colors out of", Object.keys(scheme.colours).length);
+        // Recompute tPalette after batch color changes
+        Qt.callLater(tPalette.updateAll);
         transitionTimer.restart();
     }
 
@@ -181,61 +221,123 @@ Singleton {
         readonly property real layers: reduceTransparency ? 1.0 : Appearance.transparency.layers
     }
 
+    // Batched transparent palette — computed imperatively to avoid 54 reactive bindings
     component M3TPalette: QtObject {
-        readonly property color m3primary_paletteKeyColor: root.layer(root.palette.m3primary_paletteKeyColor)
-        readonly property color m3secondary_paletteKeyColor: root.layer(root.palette.m3secondary_paletteKeyColor)
-        readonly property color m3tertiary_paletteKeyColor: root.layer(root.palette.m3tertiary_paletteKeyColor)
-        readonly property color m3neutral_paletteKeyColor: root.layer(root.palette.m3neutral_paletteKeyColor)
-        readonly property color m3neutral_variant_paletteKeyColor: root.layer(root.palette.m3neutral_variant_paletteKeyColor)
-        readonly property color m3background: root.layer(root.palette.m3background, 0)
-        readonly property color m3onBackground: root.layer(root.palette.m3onBackground)
-        readonly property color m3surface: root.layer(root.palette.m3surface, 0)
-        readonly property color m3surfaceDim: root.layer(root.palette.m3surfaceDim, 0)
-        readonly property color m3surfaceBright: root.layer(root.palette.m3surfaceBright, 0)
-        readonly property color m3surfaceContainerLowest: root.layer(root.palette.m3surfaceContainerLowest)
-        readonly property color m3surfaceContainerLow: root.layer(root.palette.m3surfaceContainerLow)
-        readonly property color m3surfaceContainer: root.layer(root.palette.m3surfaceContainer)
-        readonly property color m3surfaceContainerHigh: root.layer(root.palette.m3surfaceContainerHigh)
-        readonly property color m3surfaceContainerHighest: root.layer(root.palette.m3surfaceContainerHighest)
-        readonly property color m3onSurface: root.layer(root.palette.m3onSurface)
-        readonly property color m3surfaceVariant: root.layer(root.palette.m3surfaceVariant, 0)
-        readonly property color m3onSurfaceVariant: root.layer(root.palette.m3onSurfaceVariant)
-        readonly property color m3inverseSurface: root.layer(root.palette.m3inverseSurface, 0)
-        readonly property color m3inverseOnSurface: root.layer(root.palette.m3inverseOnSurface)
-        readonly property color m3outline: root.layer(root.palette.m3outline)
-        readonly property color m3outlineVariant: root.layer(root.palette.m3outlineVariant)
-        readonly property color m3shadow: root.layer(root.palette.m3shadow)
-        readonly property color m3scrim: root.layer(root.palette.m3scrim)
-        readonly property color m3surfaceTint: root.layer(root.palette.m3surfaceTint)
-        readonly property color m3primary: root.layer(root.palette.m3primary)
-        readonly property color m3onPrimary: root.layer(root.palette.m3onPrimary)
-        readonly property color m3primaryContainer: root.layer(root.palette.m3primaryContainer)
-        readonly property color m3onPrimaryContainer: root.layer(root.palette.m3onPrimaryContainer)
-        readonly property color m3inversePrimary: root.layer(root.palette.m3inversePrimary)
-        readonly property color m3secondary: root.layer(root.palette.m3secondary)
-        readonly property color m3onSecondary: root.layer(root.palette.m3onSecondary)
-        readonly property color m3secondaryContainer: root.layer(root.palette.m3secondaryContainer)
-        readonly property color m3onSecondaryContainer: root.layer(root.palette.m3onSecondaryContainer)
-        readonly property color m3tertiary: root.layer(root.palette.m3tertiary)
-        readonly property color m3onTertiary: root.layer(root.palette.m3onTertiary)
-        readonly property color m3tertiaryContainer: root.layer(root.palette.m3tertiaryContainer)
-        readonly property color m3onTertiaryContainer: root.layer(root.palette.m3onTertiaryContainer)
-        readonly property color m3error: root.layer(root.palette.m3error)
-        readonly property color m3onError: root.layer(root.palette.m3onError)
-        readonly property color m3errorContainer: root.layer(root.palette.m3errorContainer)
-        readonly property color m3onErrorContainer: root.layer(root.palette.m3onErrorContainer)
-        readonly property color m3primaryFixed: root.layer(root.palette.m3primaryFixed)
-        readonly property color m3primaryFixedDim: root.layer(root.palette.m3primaryFixedDim)
-        readonly property color m3onPrimaryFixed: root.layer(root.palette.m3onPrimaryFixed)
-        readonly property color m3onPrimaryFixedVariant: root.layer(root.palette.m3onPrimaryFixedVariant)
-        readonly property color m3secondaryFixed: root.layer(root.palette.m3secondaryFixed)
-        readonly property color m3secondaryFixedDim: root.layer(root.palette.m3secondaryFixedDim)
-        readonly property color m3onSecondaryFixed: root.layer(root.palette.m3onSecondaryFixed)
-        readonly property color m3onSecondaryFixedVariant: root.layer(root.palette.m3onSecondaryFixedVariant)
-        readonly property color m3tertiaryFixed: root.layer(root.palette.m3tertiaryFixed)
-        readonly property color m3tertiaryFixedDim: root.layer(root.palette.m3tertiaryFixedDim)
-        readonly property color m3onTertiaryFixed: root.layer(root.palette.m3onTertiaryFixed)
-        readonly property color m3onTertiaryFixedVariant: root.layer(root.palette.m3onTertiaryFixedVariant)
+        property color m3primary_paletteKeyColor
+        property color m3secondary_paletteKeyColor
+        property color m3tertiary_paletteKeyColor
+        property color m3neutral_paletteKeyColor
+        property color m3neutral_variant_paletteKeyColor
+        property color m3background
+        property color m3onBackground
+        property color m3surface
+        property color m3surfaceDim
+        property color m3surfaceBright
+        property color m3surfaceContainerLowest
+        property color m3surfaceContainerLow
+        property color m3surfaceContainer
+        property color m3surfaceContainerHigh
+        property color m3surfaceContainerHighest
+        property color m3onSurface
+        property color m3surfaceVariant
+        property color m3onSurfaceVariant
+        property color m3inverseSurface
+        property color m3inverseOnSurface
+        property color m3outline
+        property color m3outlineVariant
+        property color m3shadow
+        property color m3scrim
+        property color m3surfaceTint
+        property color m3primary
+        property color m3onPrimary
+        property color m3primaryContainer
+        property color m3onPrimaryContainer
+        property color m3inversePrimary
+        property color m3secondary
+        property color m3onSecondary
+        property color m3secondaryContainer
+        property color m3onSecondaryContainer
+        property color m3tertiary
+        property color m3onTertiary
+        property color m3tertiaryContainer
+        property color m3onTertiaryContainer
+        property color m3error
+        property color m3onError
+        property color m3errorContainer
+        property color m3onErrorContainer
+        property color m3primaryFixed
+        property color m3primaryFixedDim
+        property color m3onPrimaryFixed
+        property color m3onPrimaryFixedVariant
+        property color m3secondaryFixed
+        property color m3secondaryFixedDim
+        property color m3onSecondaryFixed
+        property color m3onSecondaryFixedVariant
+        property color m3tertiaryFixed
+        property color m3tertiaryFixedDim
+        property color m3onTertiaryFixed
+        property color m3onTertiaryFixedVariant
+
+        // Recompute all palette colors in one pass when inputs change
+        function updateAll(): void {
+            const p = root.palette;
+            // Layer-0 colors (use base alpha)
+            m3background = root.layer(p.m3background, 0);
+            m3surface = root.layer(p.m3surface, 0);
+            m3surfaceDim = root.layer(p.m3surfaceDim, 0);
+            m3surfaceBright = root.layer(p.m3surfaceBright, 0);
+            m3surfaceVariant = root.layer(p.m3surfaceVariant, 0);
+            m3inverseSurface = root.layer(p.m3inverseSurface, 0);
+            // Layer-1 colors (default layer)
+            m3primary_paletteKeyColor = root.layer(p.m3primary_paletteKeyColor);
+            m3secondary_paletteKeyColor = root.layer(p.m3secondary_paletteKeyColor);
+            m3tertiary_paletteKeyColor = root.layer(p.m3tertiary_paletteKeyColor);
+            m3neutral_paletteKeyColor = root.layer(p.m3neutral_paletteKeyColor);
+            m3neutral_variant_paletteKeyColor = root.layer(p.m3neutral_variant_paletteKeyColor);
+            m3onBackground = root.layer(p.m3onBackground);
+            m3surfaceContainerLowest = root.layer(p.m3surfaceContainerLowest);
+            m3surfaceContainerLow = root.layer(p.m3surfaceContainerLow);
+            m3surfaceContainer = root.layer(p.m3surfaceContainer);
+            m3surfaceContainerHigh = root.layer(p.m3surfaceContainerHigh);
+            m3surfaceContainerHighest = root.layer(p.m3surfaceContainerHighest);
+            m3onSurface = root.layer(p.m3onSurface);
+            m3onSurfaceVariant = root.layer(p.m3onSurfaceVariant);
+            m3inverseOnSurface = root.layer(p.m3inverseOnSurface);
+            m3outline = root.layer(p.m3outline);
+            m3outlineVariant = root.layer(p.m3outlineVariant);
+            m3shadow = root.layer(p.m3shadow);
+            m3scrim = root.layer(p.m3scrim);
+            m3surfaceTint = root.layer(p.m3surfaceTint);
+            m3primary = root.layer(p.m3primary);
+            m3onPrimary = root.layer(p.m3onPrimary);
+            m3primaryContainer = root.layer(p.m3primaryContainer);
+            m3onPrimaryContainer = root.layer(p.m3onPrimaryContainer);
+            m3inversePrimary = root.layer(p.m3inversePrimary);
+            m3secondary = root.layer(p.m3secondary);
+            m3onSecondary = root.layer(p.m3onSecondary);
+            m3secondaryContainer = root.layer(p.m3secondaryContainer);
+            m3onSecondaryContainer = root.layer(p.m3onSecondaryContainer);
+            m3tertiary = root.layer(p.m3tertiary);
+            m3onTertiary = root.layer(p.m3onTertiary);
+            m3tertiaryContainer = root.layer(p.m3tertiaryContainer);
+            m3onTertiaryContainer = root.layer(p.m3onTertiaryContainer);
+            m3error = root.layer(p.m3error);
+            m3onError = root.layer(p.m3onError);
+            m3errorContainer = root.layer(p.m3errorContainer);
+            m3onErrorContainer = root.layer(p.m3onErrorContainer);
+            m3primaryFixed = root.layer(p.m3primaryFixed);
+            m3primaryFixedDim = root.layer(p.m3primaryFixedDim);
+            m3onPrimaryFixed = root.layer(p.m3onPrimaryFixed);
+            m3onPrimaryFixedVariant = root.layer(p.m3onPrimaryFixedVariant);
+            m3secondaryFixed = root.layer(p.m3secondaryFixed);
+            m3secondaryFixedDim = root.layer(p.m3secondaryFixedDim);
+            m3onSecondaryFixed = root.layer(p.m3onSecondaryFixed);
+            m3onSecondaryFixedVariant = root.layer(p.m3onSecondaryFixedVariant);
+            m3tertiaryFixed = root.layer(p.m3tertiaryFixed);
+            m3tertiaryFixedDim = root.layer(p.m3tertiaryFixedDim);
+            m3onTertiaryFixed = root.layer(p.m3onTertiaryFixed);
+            m3onTertiaryFixedVariant = root.layer(p.m3onTertiaryFixedVariant);
+        }
     }
 
     component M3Palette: QtObject {

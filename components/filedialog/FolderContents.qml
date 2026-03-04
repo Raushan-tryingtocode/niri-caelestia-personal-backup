@@ -23,7 +23,7 @@ Item {
         anchors.fill: parent
         color: Colours.tPalette.m3surfaceContainer
 
-        layer.enabled: true
+        layer.enabled: root.visible && root.width > 0 && root.height > 0
         layer.effect: MultiEffect {
             maskSource: mask
             maskEnabled: true
@@ -37,7 +37,7 @@ Item {
         id: mask
 
         anchors.fill: parent
-        layer.enabled: true
+        layer.enabled: root.visible && root.width > 0
         visible: false
 
         Rectangle {

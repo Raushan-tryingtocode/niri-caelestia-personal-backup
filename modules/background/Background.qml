@@ -34,6 +34,8 @@ Loader {
             Item {
                 id: behindClock
 
+                readonly property bool isFocusedScreen: win.modelData.name === Niri.focusedMonitorName
+
                 anchors.fill: parent
 
                 Loader {
@@ -45,16 +47,21 @@ Loader {
                     sourceComponent: Wallpaper {}
                 }
 
-                Visualiser {
+                Loader {
                     anchors.fill: parent
-                    screen: win.modelData
-                    wallpaper: wallpaperLoader
+                    active: behindClock.isFocusedScreen
+
+                    sourceComponent: Visualiser {
+                        anchors.fill: parent
+                        screen: win.modelData
+                        wallpaper: wallpaperLoader
+                    }
                 }
             }
 
             Loader {
                 id: clockLoader
-                active: Config.background.desktopClock.enabled
+                active: Config.background.desktopClock.enabled && behindClock.isFocusedScreen
 
                 anchors.margins: Appearance.padding.xl * 2
                 anchors.leftMargin: Appearance.padding.xl * 2 + Config.bar.sizes.innerWidth + Math.max(Appearance.padding.sm, Config.border.thickness)

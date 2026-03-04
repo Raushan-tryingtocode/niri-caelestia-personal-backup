@@ -14,6 +14,11 @@ Singleton {
     property var cc
     property var forecast
     property string error: ""
+    property string _cachedLoc: ""
+    property string _cachedCity: ""
+    property real _lastLocationFetchMs: 0
+    property bool _geocodingInProgress: false
+    property string _lastGeocodedCity: ""
 
     readonly property string icon: cc ? Icons.getWeatherIcon(cc.weatherCode) : "cloud_alert"
     readonly property string description: cc?.weatherDesc[0].value ?? qsTr("No weather")
@@ -31,34 +36,61 @@ Singleton {
             } else {
                 fetchCoordsFromCity(configLocation);
             }
-        } 
-        else if (!loc || timer.elapsed() > 900) {
-            Requests.get("https://ipinfo.io/json", text => {
-                try {
-                    const response = JSON.parse(text);
-                    if (response.loc) {
-                        loc = response.loc;
-                        city = response.city ?? "";
-                        error = "";
-                        timer.restart();
-                    }
-                } catch (e) {
-                    console.warn("Weather: Failed to parse location response:", e);
-                    error = qsTr("Location unavailable");
+        }
+        else {
+            // Re-use cached location if less than 24 hours old
+            const now = Date.now();
+            const twentyFourHours = 86400000;
+            if (_cachedLoc && (now - _lastLocationFetchMs) < twentyFourHours) {
+                if (loc !== _cachedLoc) {
+                    loc = _cachedLoc;
+                    city = _cachedCity;
+                } else {
+                    fetchWeatherData();
                 }
-            }, err => {
-                console.warn("Weather: Location fetch failed:", err);
-                error = qsTr("Location unavailable");
-            });
+                return;
+            }
+
+            if (!loc || timer.elapsed() > 900) {
+                Requests.get("https://ipinfo.io/json", text => {
+                    try {
+                        const response = JSON.parse(text);
+                        if (response.loc) {
+                            loc = response.loc;
+                            city = response.city ?? "";
+                            _cachedLoc = loc;
+                            _cachedCity = city;
+                            _lastLocationFetchMs = Date.now();
+                            error = "";
+                            timer.restart();
+                        }
+                    } catch (e) {
+                        console.warn("Weather: Failed to parse location response:", e);
+                        error = qsTr("Location unavailable");
+                    }
+                }, err => {
+                    console.warn("Weather: Location fetch failed:", err);
+                    error = qsTr("Location unavailable");
+                });
+            }
         }
     }
 
     function fetchCoordsFromCity(cityName) {
+        // Skip if already geocoding or if we already resolved this city
+        if (_geocodingInProgress) return;
+        if (_lastGeocodedCity === cityName && loc) {
+            fetchWeatherData();
+            return;
+        }
+
+        _geocodingInProgress = true;
         const url = "https://geocoding-api.open-meteo.com/v1/search?name=" 
             + encodeURIComponent(cityName) 
             + "&count=1&language=en&format=json";
 
         Requests.get(url, text => {
+            _geocodingInProgress = false;
             try {
                 const json = JSON.parse(text);
                 if (!json.results || json.results.length === 0) {
@@ -67,15 +99,22 @@ Singleton {
                     return;
                 }
                 const result = json.results[0];
-                loc = result.latitude + "," + result.longitude;
+                const newLoc = result.latitude + "," + result.longitude;
+                _lastGeocodedCity = cityName;
                 city = result.name;
                 error = "";
-                console.log("Geocoding success: " + cityName + " -> " + loc);
+                if (loc === newLoc) {
+                    // Same location, just refresh weather
+                    fetchWeatherData();
+                } else {
+                    loc = newLoc; // triggers onLocChanged -> fetchWeatherData
+                }
             } catch (e) {
                 console.warn("Weather: Failed to parse geocoding response:", e);
                 error = qsTr("City not found");
             }
         }, err => {
+            _geocodingInProgress = false;
             console.warn("Weather: Geocoding fetch failed:", err);
             error = qsTr("Location unavailable");
         });

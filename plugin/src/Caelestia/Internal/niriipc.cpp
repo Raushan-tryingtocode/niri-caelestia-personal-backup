@@ -372,6 +372,7 @@ void NiriIpc::handleWindowsChanged(const QJsonObject& data) {
     }
 
     sortWindowsList();
+    rebuildWindowIndex();
     updateFocusedWindowFields();
     updateWorkspaceHasWindows();
     emit windowsChanged();
@@ -382,16 +383,10 @@ void NiriIpc::handleWindowOpenedOrChanged(const QJsonObject& data) {
     if (winObj.isEmpty()) return;
 
     const QVariantMap window = jsonObjectToVariantMap(winObj);
-    const auto winId = window.value(QStringLiteral("id"));
+    const qint64 winId = window.value(QStringLiteral("id")).toLongLong();
 
-    // Find or insert
-    int existingIdx = -1;
-    for (int i = 0; i < m_windows.size(); ++i) {
-        if (m_windows.at(i).toMap().value(QStringLiteral("id")) == winId) {
-            existingIdx = i;
-            break;
-        }
-    }
+    // O(1) lookup via hash index
+    const int existingIdx = findWindowIndexById(winId);
 
     if (existingIdx >= 0) {
         // Merge updated fields into existing
@@ -405,16 +400,11 @@ void NiriIpc::handleWindowOpenedOrChanged(const QJsonObject& data) {
     }
 
     sortWindowsList();
+    rebuildWindowIndex();
 
     if (window.value(QStringLiteral("is_focused")).toBool()) {
-        m_focusedWindowId = winId.toString();
-        // Find new index after sort
-        for (int i = 0; i < m_windows.size(); ++i) {
-            if (m_windows.at(i).toMap().value(QStringLiteral("id")) == winId) {
-                m_focusedWindowIndex = i;
-                break;
-            }
-        }
+        m_focusedWindowId = QString::number(winId);
+        m_focusedWindowIndex = findWindowIndexById(winId);
     }
 
     updateFocusedWindowFields();
@@ -424,14 +414,14 @@ void NiriIpc::handleWindowOpenedOrChanged(const QJsonObject& data) {
 }
 
 void NiriIpc::handleWindowClosed(const QJsonObject& data) {
-    const auto closedId = data.value(QStringLiteral("id")).toVariant();
+    const qint64 closedId = data.value(QStringLiteral("id")).toInteger();
 
-    m_windows.erase(
-        std::remove_if(m_windows.begin(), m_windows.end(), [&closedId](const QVariant& v) {
-            return v.toMap().value(QStringLiteral("id")) == closedId;
-        }),
-        m_windows.end()
-    );
+    // O(1) lookup via hash
+    const int idx = findWindowIndexById(closedId);
+    if (idx >= 0) {
+        m_windows.removeAt(idx);
+        rebuildWindowIndex();
+    }
 
     updateFocusedWindowFields();
     updateWorkspaceHasWindows();
@@ -440,15 +430,9 @@ void NiriIpc::handleWindowClosed(const QJsonObject& data) {
 
 void NiriIpc::handleWindowFocusChanged(const QJsonObject& data) {
     if (data.contains(QStringLiteral("id")) && !data.value(QStringLiteral("id")).isNull()) {
-        const QString newId = QString::number(data.value(QStringLiteral("id")).toInteger());
-        m_focusedWindowId = newId;
-        m_focusedWindowIndex = -1;
-        for (int i = 0; i < m_windows.size(); ++i) {
-            if (QString::number(m_windows.at(i).toMap().value(QStringLiteral("id")).toLongLong()) == newId) {
-                m_focusedWindowIndex = i;
-                break;
-            }
-        }
+        const qint64 id = data.value(QStringLiteral("id")).toInteger();
+        m_focusedWindowId = QString::number(id);
+        m_focusedWindowIndex = findWindowIndexById(id);
     } else {
         m_focusedWindowId.clear();
         m_focusedWindowIndex = -1;
@@ -466,31 +450,24 @@ void NiriIpc::handleWindowLayoutsChanged(const QJsonObject& data) {
         const QJsonArray pair = change.toArray();
         if (pair.size() != 2) continue;
 
-        const auto id = pair.at(0).toVariant();
+        const qint64 id = pair.at(0).toInteger();
         const auto layout = pair.at(1).toObject().toVariantMap();
 
-        for (int i = 0; i < m_windows.size(); ++i) {
-            if (m_windows.at(i).toMap().value(QStringLiteral("id")).toLongLong() == id.toLongLong()) {
-                auto w = m_windows.at(i).toMap();
-                w[QStringLiteral("layout")] = layout;
-                m_windows[i] = w;
-                break;
-            }
+        // O(1) lookup via hash index
+        const int idx = findWindowIndexById(id);
+        if (idx >= 0) {
+            auto w = m_windows.at(idx).toMap();
+            w[QStringLiteral("layout")] = layout;
+            m_windows[idx] = w;
         }
     }
 
     sortWindowsList();
+    rebuildWindowIndex();
 
-    // Re-find focused index after sort
+    // Re-find focused index after sort via hash
     if (!m_focusedWindowId.isEmpty()) {
-        const auto fId = m_focusedWindowId.toLongLong();
-        m_focusedWindowIndex = -1;
-        for (int i = 0; i < m_windows.size(); ++i) {
-            if (m_windows.at(i).toMap().value(QStringLiteral("id")).toLongLong() == fId) {
-                m_focusedWindowIndex = i;
-                break;
-            }
-        }
+        m_focusedWindowIndex = findWindowIndexById(m_focusedWindowId.toLongLong());
     }
 
     updateFocusedWindowFields();
@@ -648,6 +625,20 @@ void NiriIpc::sortWindowsList() {
     });
 }
 
+void NiriIpc::rebuildWindowIndex() {
+    m_windowIndex.clear();
+    m_windowIndex.reserve(m_windows.size());
+    for (int i = 0; i < m_windows.size(); ++i) {
+        const qint64 id = m_windows.at(i).toMap().value(QStringLiteral("id")).toLongLong();
+        m_windowIndex.insert(id, i);
+    }
+}
+
+int NiriIpc::findWindowIndexById(qint64 id) const {
+    auto it = m_windowIndex.find(id);
+    return (it != m_windowIndex.end()) ? it.value() : -1;
+}
+
 // ── LED Watchers (capslock/numlock via /sys/class/leds) ──────────────
 
 void NiriIpc::setupLedWatchers() {
@@ -671,7 +662,7 @@ void NiriIpc::setupLedWatchers() {
 
     // Poll sysfs since inotify doesn't work on virtual files
     if (!m_capsLockPath.isEmpty() || !m_numLockPath.isEmpty()) {
-        m_ledPollTimer.setInterval(300);
+        m_ledPollTimer.setInterval(1000);
         connect(&m_ledPollTimer, &QTimer::timeout, this, &NiriIpc::readLedState);
         m_ledPollTimer.start();
     }

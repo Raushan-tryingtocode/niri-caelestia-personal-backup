@@ -32,6 +32,8 @@ Singleton {
     property var loadStartTime: null
 
     property bool recentlySaved: false
+    property var _cachedSections: ({})
+    property var _dirtySections: new Set()
 
     signal configSaved()
     signal configLoaded(int elapsed)
@@ -61,24 +63,43 @@ Singleton {
     }
 
     function serializeConfig(): var {
-        return {
-            appearance: serializeAppearance(),
-            general: serializeGeneral(),
-            background: serializeBackground(),
-            bar: serializeBar(),
-            border: serializeBorder(),
-            dashboard: serializeDashboard(),
-            controlCenter: serializeControlCenter(),
-            launcher: serializeLauncher(),
-            notifs: serializeNotifs(),
-            osd: serializeOsd(),
-            session: serializeSession(),
-            winfo: serializeWinfo(),
-            lock: serializeLock(),
-            utilities: serializeUtilities(),
-            services: serializeServices(),
-            paths: serializePaths()
+        const sections = {
+            appearance: serializeAppearance,
+            general: serializeGeneral,
+            background: serializeBackground,
+            bar: serializeBar,
+            border: serializeBorder,
+            dashboard: serializeDashboard,
+            controlCenter: serializeControlCenter,
+            launcher: serializeLauncher,
+            notifs: serializeNotifs,
+            osd: serializeOsd,
+            session: serializeSession,
+            winfo: serializeWinfo,
+            lock: serializeLock,
+            utilities: serializeUtilities,
+            services: serializeServices,
+            paths: serializePaths
         };
+
+        const result = {};
+        const dirty = _dirtySections;
+        const noCache = Object.keys(_cachedSections).length === 0;
+
+        for (const [key, fn] of Object.entries(sections)) {
+            if (noCache || dirty.has(key)) {
+                _cachedSections[key] = fn();
+            }
+            result[key] = _cachedSections[key];
+        }
+
+        _dirtySections.clear();
+        return result;
+    }
+
+    function markDirty(section: string): void {
+        _dirtySections.add(section);
+        save();
     }
 
     function serializeAppearance(): var {
@@ -280,7 +301,7 @@ Singleton {
             actionPrefix: launcher.actionPrefix,
             enableDangerousActions: launcher.enableDangerousActions,
             dragThreshold: launcher.dragThreshold,
-            // ...existing code...
+            vimKeybinds: launcher.vimKeybinds,
             favouriteApps: launcher.favouriteApps,
             hiddenApps: launcher.hiddenApps,
             useFuzzy: {
@@ -332,7 +353,7 @@ Singleton {
         return {
             enabled: session.enabled,
             dragThreshold: session.dragThreshold,
-            // ...existing code...
+            vimKeybinds: session.vimKeybinds,
             commands: {
                 logout: session.commands.logout,
                 shutdown: session.commands.shutdown,

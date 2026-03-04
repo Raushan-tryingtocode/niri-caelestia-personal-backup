@@ -2,6 +2,7 @@
 
 #include <QtQuick/qquickwindow.h>
 #include <qcryptographichash.h>
+#include <qdatetime.h>
 #include <qdir.h>
 #include <qfileinfo.h>
 #include <qfuturewatcher.h>
@@ -10,6 +11,11 @@
 #include <qtconcurrentrun.h>
 
 namespace caelestia {
+
+// Static member definitions
+QMap<QString, CachingImageManager::CacheEntry> CachingImageManager::s_cacheEntries;
+qint64 CachingImageManager::s_totalCacheSize = 0;
+QMutex CachingImageManager::s_cacheMutex;
 
 qreal CachingImageManager::effectiveScale() const {
     if (m_item && m_item->window()) {
@@ -51,10 +57,11 @@ void CachingImageManager::setItem(QQuickItem* item) {
 
     if (item) {
         m_widthConn = connect(item, &QQuickItem::widthChanged, this, [this]() {
-            updateSource();
+            // Debounce resize-triggered updates
+            m_debounceTimer.start();
         });
         m_heightConn = connect(item, &QQuickItem::heightChanged, this, [this]() {
-            updateSource();
+            m_debounceTimer.start();
         });
         updateSource();
     }
@@ -145,12 +152,21 @@ void CachingImageManager::updateSource(const QString& path) {
             return;
         }
 
-        const QImageReader reader(cache.toLocalFile());
-        if (reader.canRead()) {
-            m_item->setProperty("source", cache);
+        const QString cacheLocalFile = cache.toLocalFile();
+        const QFileInfo cacheInfo(cacheLocalFile);
+        if (cacheInfo.exists() && cacheInfo.isReadable()) {
+            const QImageReader reader(cacheLocalFile);
+            if (reader.canRead()) {
+                m_item->setProperty("source", cache);
+                // Update LRU access time
+                trackCacheEntry(cacheLocalFile, cacheInfo.size());
+            } else {
+                m_item->setProperty("source", QUrl::fromLocalFile(path));
+                createCache(path, cacheLocalFile, fillMode, size);
+            }
         } else {
             m_item->setProperty("source", QUrl::fromLocalFile(path));
-            createCache(path, cache.toLocalFile(), fillMode, size);
+            createCache(path, cacheLocalFile, fillMode, size);
         }
 
         // Clear current running sha if same
@@ -168,9 +184,52 @@ QUrl CachingImageManager::cachePath() const {
     return m_cachePath;
 }
 
+void CachingImageManager::trackCacheEntry(const QString& cachePath, qint64 fileSize) {
+    QMutexLocker lock(&s_cacheMutex);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    if (s_cacheEntries.contains(cachePath)) {
+        s_cacheEntries[cachePath].lastAccess = now;
+    } else {
+        s_cacheEntries.insert(cachePath, {cachePath, fileSize, now});
+        s_totalCacheSize += fileSize;
+    }
+}
+
+void CachingImageManager::evictIfNeeded() {
+    QMutexLocker lock(&s_cacheMutex);
+
+    while (s_totalCacheSize > MAX_CACHE_BYTES && !s_cacheEntries.isEmpty()) {
+        // Find the oldest entry
+        QString oldestKey;
+        qint64 oldestAccess = std::numeric_limits<qint64>::max();
+
+        for (auto it = s_cacheEntries.constBegin(); it != s_cacheEntries.constEnd(); ++it) {
+            if (it.value().lastAccess < oldestAccess) {
+                oldestAccess = it.value().lastAccess;
+                oldestKey = it.key();
+            }
+        }
+
+        if (oldestKey.isEmpty()) break;
+
+        const auto& entry = s_cacheEntries[oldestKey];
+        QFile::remove(entry.filePath);
+        s_totalCacheSize -= entry.fileSize;
+        s_cacheEntries.remove(oldestKey);
+    }
+}
+
 void CachingImageManager::createCache(
-    const QString& path, const QString& cache, const QString& fillMode, const QSize& size) const {
-    QThreadPool::globalInstance()->start([path, cache, fillMode, size] {
+    const QString& path, const QString& cache, const QString& fillMode, const QSize& size) {
+    // Evict old entries before creating new ones
+    evictIfNeeded();
+
+    // Limit concurrent scaling tasks
+    QThreadPool::globalInstance()->setMaxThreadCount(
+        qMin(2, QThread::idealThreadCount()));
+
+    QThreadPool::globalInstance()->start([path, cache, fillMode, size, this] {
         QImage image(path);
 
         if (image.isNull()) {
@@ -200,9 +259,21 @@ void CachingImageManager::createCache(
         }
 
         const QString parent = QFileInfo(cache).absolutePath();
-        if (!QDir().mkpath(parent) || !image.save(cache)) {
-            qWarning() << "CachingImageManager::createCache: failed to save to" << cache;
+        if (!QDir().mkpath(parent)) {
+            qWarning() << "CachingImageManager::createCache: failed to create directory" << parent;
+            return;
         }
+
+        if (!image.save(cache)) {
+            qWarning() << "CachingImageManager::createCache: failed to save to" << cache;
+            return;
+        }
+
+        // Track the new cache entry
+        const QFileInfo info(cache);
+        QMetaObject::invokeMethod(
+            this, [this, cache, size = info.size()]() { trackCacheEntry(cache, size); },
+            Qt::QueuedConnection);
     });
 }
 

@@ -61,14 +61,14 @@ JsonObject {
     component FontSize: JsonObject {
         property real scale: 1
         // M3-inspired canonical names (ascending order)
-        property int labelSmall: 8 * scale
-        property int labelMedium: 10 * scale
-        property int labelLarge: 11 * scale
-        property int bodySmall: 12 * scale
-        property int bodyMedium: 13 * scale
-        property int bodyLarge: 15 * scale
-        property int titleMedium: 18 * scale
-        property int headlineLarge: 28 * scale
+        property int labelSmall: Math.max(1, Math.round(8 * scale))
+        property int labelMedium: Math.max(1, Math.round(10 * scale))
+        property int labelLarge: Math.max(1, Math.round(11 * scale))
+        property int bodySmall: Math.max(1, Math.round(12 * scale))
+        property int bodyMedium: Math.max(1, Math.round(13 * scale))
+        property int bodyLarge: Math.max(1, Math.round(15 * scale))
+        property int titleMedium: Math.max(1, Math.round(18 * scale))
+        property int headlineLarge: Math.max(1, Math.round(28 * scale))
         // Backward-compat aliases
         readonly property int ultraSmall: labelSmall
         readonly property int extraSmall: labelMedium

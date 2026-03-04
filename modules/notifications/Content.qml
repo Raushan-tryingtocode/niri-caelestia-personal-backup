@@ -18,30 +18,49 @@ Item {
     anchors.right: parent.right
 
     implicitWidth: Config.notifs.sizes.width + padding * 2
-    implicitHeight: {
+
+    property real _cachedContentHeight: 0
+
+    function _recalcContentHeight(): void {
         const count = list.count;
-        if (count === 0)
-            return 0;
+        if (count === 0) {
+            _cachedContentHeight = 0;
+            return;
+        }
 
         let height = (count - 1) * Appearance.spacing.md;
         for (let i = 0; i < count; i++)
             height += list.itemAtIndex(i)?.nonAnimHeight ?? 0;
 
+        _cachedContentHeight = height;
+    }
+
+    Connections {
+        target: list
+        function onCountChanged() { root._recalcContentHeight(); }
+    }
+
+    implicitHeight: {
+        const height = _cachedContentHeight;
+        if (height === 0)
+            return 0;
+
+        let h = height;
         if (visibilities && panel) {
             if (visibilities.osd) {
-                const h = panel.osd.y - Config.border.rounding * 2 - padding * 2;
-                if (height > h)
-                    height = h;
+                const maxH = panel.osd.y - Config.border.rounding * 2 - padding * 2;
+                if (h > maxH)
+                    h = maxH;
             }
 
             if (visibilities.session) {
-                const h = panel.session.y - Config.border.rounding * 2 - padding * 2;
-                if (height > h)
-                    height = h;
+                const maxH = panel.session.y - Config.border.rounding * 2 - padding * 2;
+                if (h > maxH)
+                    h = maxH;
             }
         }
 
-        return Math.min((QsWindow.window?.screen?.height ?? 0) - Config.border.thickness * 2, height + padding * 2);
+        return Math.min((QsWindow.window?.screen?.height ?? 0) - Config.border.thickness * 2, h + padding * 2);
     }
 
     ClippingWrapperRectangle {

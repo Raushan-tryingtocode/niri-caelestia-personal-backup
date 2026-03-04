@@ -100,6 +100,28 @@ void FileSystemModel::setFilter(Filter filter) {
     update();
 }
 
+int FileSystemModel::maxWatchDepth() const {
+    return m_maxWatchDepth;
+}
+
+void FileSystemModel::setMaxWatchDepth(int depth) {
+    if (m_maxWatchDepth == depth) return;
+    m_maxWatchDepth = depth;
+    emit maxWatchDepthChanged();
+    update();
+}
+
+int FileSystemModel::maxWatchPaths() const {
+    return m_maxWatchPaths;
+}
+
+void FileSystemModel::setMaxWatchPaths(int paths) {
+    if (m_maxWatchPaths == paths) return;
+    m_maxWatchPaths = paths;
+    emit maxWatchPathsChanged();
+    update();
+}
+
 QList<FileSystemEntry*> FileSystemModel::entries() const {
     return m_entries;
 }
@@ -108,7 +130,11 @@ void FileSystemModel::watchDirIfRecursive(const QString& path) {
     if (m_recursive && m_watchChanges) {
         const auto currentDir = m_dir;
         const bool showHidden = m_showHidden;
-        const auto future = QtConcurrent::run([showHidden, path]() {
+        const int maxDepth = m_maxWatchDepth;
+        const int maxPaths = m_maxWatchPaths;
+        const QString basePath = m_path;
+        const int currentWatchCount = static_cast<int>(m_watcher.directories().size());
+        const auto future = QtConcurrent::run([showHidden, path, basePath, maxDepth, maxPaths, currentWatchCount]() {
             QDir::Filters filters = QDir::Dirs | QDir::NoDotAndDotDot;
             if (showHidden) {
                 filters |= QDir::Hidden;
@@ -116,8 +142,18 @@ void FileSystemModel::watchDirIfRecursive(const QString& path) {
 
             QDirIterator iter(path, filters, QDirIterator::Subdirectories);
             QStringList dirs;
+            int budget = maxPaths - currentWatchCount;
             while (iter.hasNext()) {
-                dirs << iter.next();
+                const QString dir = iter.next();
+                // Check depth relative to base path
+                const QString relative = dir.mid(basePath.size());
+                const int depth = static_cast<int>(relative.count('/'));
+                if (depth > maxDepth) continue;
+                if (budget-- <= 0) {
+                    qWarning() << "FileSystemModel: maxWatchPaths limit reached (" << maxPaths << "), skipping further watches";
+                    break;
+                }
+                dirs << dir;
             }
             return dirs;
         });

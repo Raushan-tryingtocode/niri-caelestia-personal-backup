@@ -29,6 +29,8 @@ Singleton {
     readonly property list<PwNode> sinks: nodes.sinks
     readonly property list<PwNode> sources: nodes.sources
 
+    readonly property var streams: Pipewire.nodes.values.filter(node => node.isStream && node.audio)
+
     readonly property PwNode sink: Pipewire.defaultAudioSink
     readonly property PwNode source: Pipewire.defaultAudioSource
 
@@ -58,6 +60,28 @@ Singleton {
             source.audio.muted = false;
             source.audio.volume = Math.max(0, Math.min(1, newVolume));
         }
+    }
+
+    function getStreamName(node: PwNode): string {
+        return node?.description || node?.name || qsTr("Unknown");
+    }
+
+    function getStreamVolume(node: PwNode): real {
+        return node?.audio?.volume ?? 0;
+    }
+
+    function getStreamMuted(node: PwNode): bool {
+        return !!node?.audio?.muted;
+    }
+
+    function setStreamVolume(node: PwNode, newVolume: real): void {
+        if (node?.audio)
+            node.audio.volume = Math.max(0, Math.min(1, newVolume));
+    }
+
+    function setStreamMuted(node: PwNode, muted: bool): void {
+        if (node?.audio)
+            node.audio.muted = muted;
     }
 
     function incrementSourceVolume(amount: real): void {
@@ -106,6 +130,6 @@ Singleton {
     }
 
     PwObjectTracker {
-        objects: [...root.sinks, ...root.sources]
+        objects: [...root.sinks, ...root.sources, ...root.streams]
     }
 }
