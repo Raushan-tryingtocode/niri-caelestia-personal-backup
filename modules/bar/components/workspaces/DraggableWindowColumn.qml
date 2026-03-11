@@ -158,7 +158,7 @@ Item {
         let indices = draggedWindows.map(w => flatWindows.findIndex(x => x.id === w.id));
 
         // 8. Call backend to update order
-        Niri.moveGroupColumnsSequential(Niri.focusedWindowId, draggedWindows.map(w => w.id), flatIndex + 1, 5);
+        Niri.moveGroupColumnsSequential(Niri.focusedWindowId, draggedWindows.map(w => w.id), flatIndex + 1);
     }
 
     // height: column.height

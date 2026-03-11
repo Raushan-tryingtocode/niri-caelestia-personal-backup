@@ -17,6 +17,7 @@ Singleton {
     property string _cachedLoc: ""
     property string _cachedCity: ""
     property real _lastLocationFetchMs: 0
+    property bool _locationFetchInProgress: false
     property bool _geocodingInProgress: false
     property string _lastGeocodedCity: ""
 
@@ -51,8 +52,10 @@ Singleton {
                 return;
             }
 
-            if (!loc || timer.elapsed() > 900) {
+            if (!loc && !_locationFetchInProgress) {
+                _locationFetchInProgress = true;
                 Requests.get("https://ipinfo.io/json", text => {
+                    _locationFetchInProgress = false;
                     try {
                         const response = JSON.parse(text);
                         if (response.loc) {
@@ -62,13 +65,13 @@ Singleton {
                             _cachedCity = city;
                             _lastLocationFetchMs = Date.now();
                             error = "";
-                            timer.restart();
                         }
                     } catch (e) {
                         console.warn("Weather: Failed to parse location response:", e);
                         error = qsTr("Location unavailable");
                     }
                 }, err => {
+                    _locationFetchInProgress = false;
                     console.warn("Weather: Location fetch failed:", err);
                     error = qsTr("Location unavailable");
                 });
@@ -231,9 +234,5 @@ Singleton {
         running: true
         repeat: true
         onTriggered: fetchWeatherData()
-    }
-
-    ElapsedTimer {
-        id: timer
     }
 }

@@ -25,26 +25,40 @@ Singleton {
     readonly property Transparency transparency: Transparency {}
     property real wallLuminance
 
+    property bool _updatePending: false
+
+    function requestUpdate() {
+        if (!_updatePending) {
+            _updatePending = true;
+            _luminanceCache = {};
+            _luminanceCacheSize = 0;
+            Qt.callLater(() => {
+                _updatePending = false;
+                tPalette.updateAll();
+            });
+        }
+    }
+
     // Invalidate luminance cache and schedule tPalette update when inputs change
-    onShowPreviewChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
-    onWallLuminanceChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
-    onLightChanged: { _luminanceCache = {}; _luminanceCacheSize = 0; Qt.callLater(tPalette.updateAll); }
+    onShowPreviewChanged: requestUpdate()
+    onWallLuminanceChanged: requestUpdate()
+    onLightChanged: requestUpdate()
 
     Connections {
         target: root.transparency
-        function onEnabledChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
-        function onBaseChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
-        function onLayersChanged(): void { root._luminanceCache = {}; root._luminanceCacheSize = 0; Qt.callLater(root.tPalette.updateAll); }
+        function onEnabledChanged(): void { root.requestUpdate(); }
+        function onBaseChanged(): void { root.requestUpdate(); }
+        function onLayersChanged(): void { root.requestUpdate(); }
     }
 
     Connections {
         target: root.palette
-        function onM3primaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
-        function onM3surfaceChanged(): void { Qt.callLater(root.tPalette.updateAll); }
-        function onM3backgroundChanged(): void { Qt.callLater(root.tPalette.updateAll); }
-        function onM3secondaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
-        function onM3tertiaryChanged(): void { Qt.callLater(root.tPalette.updateAll); }
-        function onM3errorChanged(): void { Qt.callLater(root.tPalette.updateAll); }
+        function onM3primaryChanged(): void { root.requestUpdate(); }
+        function onM3surfaceChanged(): void { root.requestUpdate(); }
+        function onM3backgroundChanged(): void { root.requestUpdate(); }
+        function onM3secondaryChanged(): void { root.requestUpdate(); }
+        function onM3tertiaryChanged(): void { root.requestUpdate(); }
+        function onM3errorChanged(): void { root.requestUpdate(); }
     }
 
     // Luminance cache to avoid redundant Math.pow() calls
@@ -58,7 +72,7 @@ Singleton {
         const key = "" + c;
         if (key in _luminanceCache)
             return _luminanceCache[key];
-        const val = Math.sqrt(0.299 * (c.r ** 2) + 0.587 * (c.g ** 2) + 0.114 * (c.b ** 2));
+        const val = Math.sqrt(0.299 * (c.r * c.r) + 0.587 * (c.g * c.g) + 0.114 * (c.b * c.b));
         // Limit cache size to prevent unbounded growth
         if (_luminanceCacheSize > 200) {
             _luminanceCache = {};
@@ -118,7 +132,7 @@ Singleton {
         }
         console.log("Colours.load: loaded", loadedCount, "colors out of", Object.keys(scheme.colours).length);
         // Recompute tPalette after batch color changes
-        Qt.callLater(tPalette.updateAll);
+        requestUpdate();
         transitionTimer.restart();
     }
 

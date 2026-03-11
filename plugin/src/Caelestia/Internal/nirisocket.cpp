@@ -95,10 +95,21 @@ void NiriEventSocket::processLine(const QByteArray& line) {
 
     if (!m_handshakeDone) {
         // First response is {"Ok":"Handled"} for EventStream
+        if (!obj.contains(QStringLiteral("Ok"))) {
+            qWarning() << "NiriEventSocket: Critical handshake failure. Expected {\"Ok\":...}, got:" << doc.toJson(QJsonDocument::Compact);
+            disconnectFromNiri();
+            return;
+        }
+
         m_handshakeDone = true;
         m_reconnectDelay = 1000;
         qDebug() << "NiriEventSocket: Event stream active";
         emit connected();
+        return;
+    }
+
+    if (obj.isEmpty()) {
+        qWarning() << "NiriEventSocket: Received empty or invalid event JSON payload";
         return;
     }
 
@@ -187,9 +198,15 @@ void NiriRequestSocket::startRequest(const PendingRequest& req) {
                 callback(false, QJsonObject());
             } else {
                 const QJsonObject obj = doc.object();
-                const bool ok = obj.contains(QStringLiteral("Ok"));
-                callback(ok, ok ? QJsonObject{{QStringLiteral("result"), obj.value(QStringLiteral("Ok"))}}
-                               : obj);
+                if (obj.contains(QStringLiteral("Err"))) {
+                    qWarning() << "NiriRequestSocket: IPC explicitly returned error:" << obj.value(QStringLiteral("Err"));
+                    callback(false, obj);
+                } else if (obj.contains(QStringLiteral("Ok"))) {
+                    callback(true, QJsonObject{{QStringLiteral("result"), obj.value(QStringLiteral("Ok"))}});
+                } else {
+                    qWarning() << "NiriRequestSocket: Unrecognized IPC response schema (Missing 'Ok' or 'Err'):" << doc.toJson(QJsonDocument::Compact);
+                    callback(false, obj);
+                }
             }
         }
         sock->deleteLater();

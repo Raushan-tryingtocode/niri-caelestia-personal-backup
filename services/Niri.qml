@@ -38,36 +38,36 @@ Singleton {
         }
     }
 
-    // Reusable timer for moveColumnToIndexAfterFocus
-    property var _moveAfterFocusCb: null
-    property Timer _moveAfterFocusTimer: Timer {
-        repeat: false
-        onTriggered: {
-            if (root._moveAfterFocusCb) {
-                var cb = root._moveAfterFocusCb;
-                root._moveAfterFocusCb = null;
-                cb();
-            }
-        }
-    }
+    // State machine for moveColumnToIndexAfterFocus
+    property var _moveAfterFocusPendingCb: null
+    property string _moveAfterFocusPendingId: ""
 
-    // State + timer for sequential group column moves
+    // State machine for sequential group column moves
     property var _seqState: null
-    property Timer _seqTimer: Timer {
-        repeat: false
-        onTriggered: {
-            var s = root._seqState;
-            if (!s) return;
+
+    onFocusedWindowIdChanged: {
+        // Handle single window move after focus
+        if (_moveAfterFocusPendingCb && Number(focusedWindowId) === Number(_moveAfterFocusPendingId)) {
+            var cb = _moveAfterFocusPendingCb;
+            _moveAfterFocusPendingCb = null;
+            _moveAfterFocusPendingId = "";
+            cb();
+        }
+
+        // Handle sequential group moves
+        var s = _seqState;
+        if (s && Number(focusedWindowId) === Number(s.curWindowId)) {
             if (s.i >= s.windowIds.length) {
-                root._seqState = null;
-                root.focusWindow(Number(s.curWindowId));
-                return;
+                // Done sequential moves, restore initial focus
+                _seqState = null;
+                root.focusWindow(Number(s.initialWindowId));
+            } else {
+                // Execute next move in sequence
+                var wid = s.windowIds[s.i];
+                s.curWindowId = wid; // Update what we are waiting for next
+                s.i++;
+                root.moveColumnToIndexAfterFocus(wid, s.targetIndex);
             }
-            var wid = s.windowIds[s.i];
-            s.i++;
-            root.moveColumnToIndexAfterFocus(wid, s.targetIndex);
-            root._seqTimer.interval = s.delayMs * (s.i + 1) || 100;
-            root._seqTimer.restart();
         }
     }
 
@@ -365,34 +365,36 @@ Singleton {
         return false;
     }
 
-    function moveColumnToIndexAfterFocus(windowId, index, delayMs) {
+    function moveColumnToIndexAfterFocus(windowId, index) {
         if (!niriAvailable) return false;
         
         if (Number(windowId) === Number(focusedWindowId)) {
             return NiriIpc.action("move-column-to-index", [index.toString()]);
         }
         
-        focusWindow(windowId);
-        
-        var delay = delayMs !== undefined ? delayMs : 25;
+        _moveAfterFocusPendingId = windowId.toString();
         _moveAfterFocusCb = function() {
             NiriIpc.action("move-column-to-index", [index.toString()]);
         };
-        _moveAfterFocusTimer.interval = delay;
-        _moveAfterFocusTimer.restart();
+        
+        focusWindow(windowId);
         return true;
     }
 
-    function moveGroupColumnsSequential(curWindowId, windowIds, targetIndex, delayMs) {
+    function moveGroupColumnsSequential(initialWindowId, windowIds, targetIndex) {
+        if (!windowIds || windowIds.length === 0) return;
+        
+        // Start the state machine logic
         _seqState = {
-            curWindowId: curWindowId,
+            initialWindowId: initialWindowId,
+            curWindowId: windowIds[0], // We wait for the first window to gain focus
             windowIds: windowIds,
             targetIndex: targetIndex,
-            delayMs: delayMs,
-            i: 0
+            i: 1 // Start at 1, since we're immediately dispatching index 0 below
         };
-        _seqTimer.interval = delayMs * 1 || 100;
-        _seqTimer.restart();
+        
+        // Dispatch the first sequence trigger
+        moveColumnToIndexAfterFocus(windowIds[0], targetIndex);
     }
 
     // --- Grouping Functions ---
