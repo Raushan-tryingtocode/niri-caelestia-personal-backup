@@ -122,10 +122,40 @@ Singleton {
 
         command: ["ddcutil", "detect", "--brief"]
         stdout: StdioCollector {
-            onStreamFinished: root.ddcMonitors = text.trim().split("\n\n").filter(d => d.startsWith("Display ")).map(d => ({
-                        busNum: d.match(/I2C bus:[ ]*\/dev\/i2c-([0-9]+)/)?.[1] ?? "",
-                        connector: d.match(/DRM connector:\s+(.*)/)?.[1]?.replace(/^card\d+-/, "") ?? "" // strip "card1-"
-                    })).filter(d => d.busNum && d.connector)
+            onStreamFinished: {
+                const parts = text.trim().split("\n\n").filter(d => d.startsWith("Display "));
+                const results = [];
+                for (const d of parts) {
+                    const lines = d.split("\n");
+                    let busNum = "";
+                    let connector = "";
+                    for (const line of lines) {
+                        const t = line.trim();
+                        if (t.startsWith("I2C bus:")) {
+                            const i2cMatch = t.split("/dev/i2c-");
+                            if (i2cMatch.length > 1) {
+                                busNum = i2cMatch[1].trim();
+                            }
+                        } else if (t.startsWith("DRM connector:")) {
+                            const connSplit = t.split("DRM connector:");
+                            if (connSplit.length > 1) {
+                                let c = connSplit[1].trim();
+                                if (c.startsWith("card")) {
+                                    const hyphenIdx = c.indexOf("-");
+                                    if (hyphenIdx !== -1) {
+                                        c = c.substring(hyphenIdx + 1);
+                                    }
+                                }
+                                connector = c;
+                            }
+                        }
+                    }
+                    if (busNum && connector) {
+                        results.push({ busNum, connector });
+                    }
+                }
+                root.ddcMonitors = results;
+            }
         }
         onExited: (exitCode) => {
             if (exitCode !== 0) {

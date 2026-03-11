@@ -74,202 +74,23 @@ Singleton {
 
     // GPU Monitoring Properties
 
-    property var gpus: [] // Array of GPU objects: {vendor, name, usage, temperature, memoryUsed, memoryTotal, card, busId}
-    property var _gpuDetectCallback: null
-    property var _cachedGpuList: null
-
-    property string gpuDetectScript: "
-for card in /sys/class/drm/card[0-9]*; do
-    [ -d \"$card/device\" ] || continue
-    case \"$card\" in
-        *-*) continue ;;
-    esac
-    driver=\$(cat \"$card/device/uevent\" 2>/dev/null | grep ^DRIVER= | cut -d= -f2)
-    vendor=\$(cat \"$card/device/vendor\" 2>/dev/null)
-    device=\$(cat \"$card/device/device\" 2>/dev/null)
-    name=\$(cat \"$card/device/uevent\" 2>/dev/null | grep ^DRIVER= | cut -d= -f2)
-    busid=\$(basename \"$card\")
-    pciid=\$(basename \$(readlink -f \"$card/device\") 2>/dev/null)
-    if [ \"\$driver\" = \"nvidia\" ]; then
-        type=\"NVIDIA\"
-    elif [ -f \"$card/device/gpu_busy_percent\" ]; then
-        type=\"GENERIC\"
-    else
-        type=\"UNKNOWN\"
-    fi
-    echo \"\$busid|\$type|\$vendor|\$device|\$name|\$pciid\"
-done | awk -F'|' '!seen[\$6]++ {print \$0}'
-"
-
-    Process {
-        id: gpuDetectProcess
-        property var _callback: null
-        command: ["sh", "-c", root.gpuDetectScript]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (typeof gpuDetectProcess._callback === "function") {
-                    gpuDetectProcess._callback(text);
-                }
-            }
-        }
-    }
-
-    Process {
-        id: nvidiaStatsProcess
-        property var _callback: null
-        command: []
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (typeof nvidiaStatsProcess._callback === "function") {
-                    nvidiaStatsProcess._callback(text);
-                }
-            }
-        }
-    }
-
-    // Helper: Find first matching file for a glob pattern (for hwmon)
-    function findFirstMatchingFile(pattern) {
-        try {
-            let files = Quickshell.ls(pattern);
-            if (files && files.length > 0)
-                return files[0];
-        } catch (e) {}
-        return "";
-    }
-
-    function detectGpus(callback) {
-        if (_cachedGpuList !== null) {
-            callback(_cachedGpuList);
-            return;
-        }
-        gpuDetectProcess._callback = function (output) {
-            let lines = output.trim().split("\n");
-            let detected = [];
-            for (let line of lines) {
-                let [card, type, vendor, device, name, pciid] = line.split("|");
-                detected.push({
-                    card,
-                    type,
-                    vendor,
-                    device,
-                    name,
-                    pciid
-                });
-            }
-            root._cachedGpuList = detected;
-            callback(detected);
-        };
-        gpuDetectProcess.running = true;
-    }
-
-    function invalidateGpuCache() {
-        _cachedGpuList = null;
-    }
+    property var gpus: []
 
     function updateGpuStats() {
-        detectGpus(function (gpuList) {
-            let pending = gpuList.length;
-            let results = [];
-            if (pending === 0) {
-                gpus = [];
-                return;
-            }
-            for (let i = 0; i < gpuList.length; i++) {
-                let gpu = gpuList[i];
-                if (gpu.type === "NVIDIA") {
-                    nvidiaStatsProcess._callback = function (text) {
-                        let parts = text.trim().split(",");
-                        if (parts.length >= 5) {
-                            results.push({
-                                vendor: "NVIDIA",
-                                name: parts[2].trim(),
-                                usage: parseFloat(parts[0]),
-                                temperature: parseInt(parts[1], 10),
-                                memoryUsed: parseInt(parts[3], 10),
-                                memoryTotal: parseInt(parts[4], 10),
-                                card: gpu.card
-                            });
-                        } else {
-                            results.push({
-                                vendor: "NVIDIA",
-                                name: "NVIDIA GPU",
-                                usage: null,
-                                temperature: null,
-                                memoryUsed: null,
-                                memoryTotal: null,
-                                card: gpu.card
-                            });
-                        }
-                        pending--;
-                        if (pending === 0) {
-                            gpus = results;
-                        }
-                    };
-                    nvidiaStatsProcess.command = ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,name,memory.used,memory.total", "--format=csv,noheader,nounits", "-i", String(i)];
-                    nvidiaStatsProcess.running = true;
-                    // } else if ((gpu.type === "GENERIC" || gpu.type === "UNKNOWN") && gpu.vendor && gpu.vendor.replace(/^0x/i, "").toLowerCase() === "8086") {
-                    //     // Intel GPU detected, use intel_gpu_top
-                    //     console.log("INTEL DETECTED:", JSON.stringify(gpu));
-                    //     intelGpuTopProcess._callback = function (text) {
-                    //         console.log("[intelGpuTopProcess._callback] called. Text:", text && text.length ? text.slice(0, 200) : "<empty>");
-                    //         let parsed = parseIntelGpuTop(text);
-                    //         if (parsed.length > 0) {
-                    //             parsed[0].card = gpu.card;
-                    //             parsed[0].busId = gpu.pciid || null;
-                    //             results.push(parsed[0]);
-                    //         }
-                    //         pending--;
-                    //         if (pending === 0) {
-                    //             gpus = results;
-                    //         }
-                    //     };
-                    //     console.log("Starting intel_gpu_top process...");
-                    //     intelGpuTopProcess.running = true;
-                    //     intelGpuTopKillTimer.start();
-                } else if (gpu.type === "GENERIC") {
-                    let usage = null;
-                    let temp = null;
-                    try {
-                        usage = parseInt(Quickshell.readFile("/sys/class/drm/" + gpu.card + "/device/gpu_busy_percent").trim(), 10);
-                    } catch (e) {}
-                    let hwmonGlob = "/sys/class/drm/" + gpu.card + "/device/hwmon/hwmon*/temp1_input";
-                    let tempPath = findFirstMatchingFile(hwmonGlob);
-                    try {
-                        if (tempPath)
-                            temp = parseInt(Quickshell.readFile(tempPath).trim(), 10) / 1000;
-                    } catch (e) {}
-                    results.push({
-                        vendor: "GENERIC",
-                        name: gpu.name || "Generic GPU",
-                        usage: usage,
-                        temperature: temp,
-                        memoryUsed: null,
-                        memoryTotal: null,
-                        card: gpu.card
-                    });
-                    pending--;
-                    if (pending === 0) {
-                        gpus = results;
-                    }
-                } else {
-                    results.push({
-                        vendor: "UNKNOWN",
-                        name: gpu.name || "Unknown GPU",
-                        usage: null,
-                        temperature: null,
-                        memoryUsed: null,
-                        memoryTotal: null,
-                        card: gpu.card
-                    });
-                    pending--;
-                    if (pending === 0) {
-                        gpus = results;
-                    }
-                }
-            }
-        });
+        if (typeof SysMonitor !== "undefined" && SysMonitor.gpu) {
+            let gpu = SysMonitor.gpu;
+            gpus = [{
+                vendor: gpu.type || "UNKNOWN",
+                name: gpu.name || "Unknown GPU",
+                usage: gpu.utilization || 0,
+                temperature: gpu.temperature || 0,
+                memoryUsed: 0,
+                memoryTotal: 0,
+                card: ""
+            }];
+        } else {
+            gpus = [];
+        }
     }
 
     // END GPU STUFF
@@ -361,6 +182,16 @@ done | awk -F'|' '!seen[\$6]++ {print \$0}'
         array.push(value);
         if (array.length > historySize)
             array.shift();
+    }
+
+    function formatSystemMemory(kb) {
+        if (kb >= 1048576) {
+            return (kb / 1048576).toFixed(1) + " GiB";
+        } else if (kb >= 1024) {
+            return (kb / 1024).toFixed(1) + " MiB";
+        } else {
+            return kb + " KiB";
+        }
     }
 
     function calculateCpuUsage(currentStats, lastStats) {
