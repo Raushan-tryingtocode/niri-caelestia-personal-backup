@@ -44,7 +44,7 @@ Loader {
                     anchors.fill: parent
                     active: Config.background.wallpaperEnabled
 
-                    sourceComponent: Wallpaper {}
+                    //sourceComponent: Wallpaper {}
                 }
 
                 Loader {

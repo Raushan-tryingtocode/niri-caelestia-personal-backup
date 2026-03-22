@@ -17,7 +17,7 @@ Singleton {
 
     readonly property string imagecache: `${cache}/imagecache`
     readonly property string notificationsData: `${data}/notifications.json`
-    readonly property string wallsdir: Quickshell.env("CAELESTIA_WALLPAPERS_DIR") || absolutePath(Config.paths.wallpaperDir)
+    readonly property string wallsdir: "/home/raushan/Desktop/wallpapers"
     readonly property string libdir: Quickshell.env("CAELESTIA_LIB_DIR") || "/usr/lib/caelestia"
 
     function toLocalFile(path: url): string {

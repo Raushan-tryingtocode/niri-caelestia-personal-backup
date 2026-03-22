@@ -14,7 +14,7 @@ Searcher {
     readonly property string currentNamePath: `${stateDir}/path.txt`
 
     property bool showPreview: false
-    readonly property string current: showPreview ? previewPath : actualCurrent
+    readonly property string current: ""
     property string previewPath
     property string actualCurrent
     property bool previewColourLock

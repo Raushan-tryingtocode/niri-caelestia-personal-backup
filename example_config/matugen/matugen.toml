@@ -1,0 +1,6 @@
+[config]
+default_mode = 'dark'
+
+[[templates.quickshell]]
+input_path = '/home/raushan/.config/quickshell/niri-caelestia-shell/templates/colors.qml'
+output_path = '/home/raushan/.config/quickshell/niri-caelestia-shell/colors.qml'
