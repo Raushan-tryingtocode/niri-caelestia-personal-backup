@@ -1,3 +1,22 @@
+# Raushan's Niri-Caelestia Setup 🌧️
+This is my personal fork of the [Caelestia Shell](https://github.com/Ayushkr2003/niri-caelestia-shell).
+
+![My Cyberpunk Desktop](./caelestia.png)
+
+### 🛠️ My Customizations:
+* **Live Rain Background:** Patched `Background.qml` to support `mpvpaper` live video.
+* **Wallpaper Service Mod:** Disabled the default static wallpaper engine for a cleaner "Live" look.
+* **Arch-Niri Optimized:** Configured specifically for my setup at `codemaster3000`.
+
+### 🌌 Credits & Assets
+* **Live Wallpaper:** [Raindrops at Night on City Tower Window](https://www.desktophut.com/raindrops-at-night-on-city-tower-window-8128) via DesktopHut.
+* **Disclaimer:** I do not own this video file. It is included in this repository for personal backup and aesthetic demonstration purposes only. All rights belong to the original creator/DesktopHut.
+
+---
+# Original Documentation.
+
+
+
 <h1 align=center>🌌 Niri-Caelestia Shell</h1>
 
 <div align=center>
