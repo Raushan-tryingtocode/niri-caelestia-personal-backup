@@ -1,16 +1,3 @@
-# Raushan's Niri-Caelestia Setup 🌧️
-This is my personal fork of the [Caelestia Shell](https://github.com/Ayushkr2003/niri-caelestia-shell).
-
-### 🛠️ My Customizations:
-* **Live Rain Background:** Patched `Background.qml` to support `mpvpaper` live video.
-* **Wallpaper Service Mod:** Disabled the default static wallpaper engine for a cleaner "Live" look.
-* **Arch-Niri Optimized:** Configured specifically for my setup at `codemaster3000`.
-
----
-# Original Documentation.
-
-
-
 <h1 align=center>🌌 Niri-Caelestia Shell</h1>
 
 <div align=center>
